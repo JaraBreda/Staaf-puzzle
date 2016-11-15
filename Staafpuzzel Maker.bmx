@@ -3,7 +3,16 @@ Strict
 Framework maxgui.drivers
 Import jcr6.zlibdriver
 Import brl.eventqueue
+Import brl.glmax2d
 Import tricky_units.Listfile
+Import tricky_units.rectangles
+Import tricky_units.Dirry
+Import brl.freetypefont
+Import brl.pngloader
+
+Incbin "VoorReg.ttf"
+
+AppTitle = StripAll(AppFile)
 
 Global filerequired:TList = New TList
 Global activegadgetrequired:TList = New TList
@@ -23,7 +32,7 @@ CreateMenu "",0,filemenu
 ListAddLast filerequired,CreateMenu("Exporteer puzzle",1005,filemenu,key_e,modifier_command)
 ListAddLast filerequired,CreateMenu("Exporteer puzzle met antwoorden",1006,filemenu,key_e,modifier_command|modifier_alt)
 CreateMenu "",0,filemenu
-Global RecentMenu:TGadget = CreateMenu("Recent",0,filemenu)
+Global RecentMenu:TGadget = CreateMenu("Recent",0,FileMenu)
 
 ?Not macos
 CreateMenu "",0,filemenu
@@ -38,7 +47,27 @@ ListAddLast activegadgetrequired,CreateMenu("Kopieren",2001,editmenu,key_c,modif
 ListAddLast activegadgetrequired,CreateMenu("Knippen",2002,editmenu,key_x,modifier_command)
 ListAddLast activegadgetrequired,CreateMenu("Plakken",2003,editmenu,key_v,modifier_command)
 
+
+Global Recentlist:TList = New TList
+Global RecentFile$ = Dirry("$AppSupport$/StaafPuzzle.recent")
+Global RecentCount
+Global RecentItem:TGadget[10]
+If FileType(recentfile)
+	Print "Reading "+Recentfile
+	For Local l$=EachIn Listfile(recentfile)
+		If recentcount<10 And (Not(ListContains(recentlist,l)))
+			RecentCount:+1
+			Print "= Adding: "+l+" >> "+Recentcount
+			ListAddLast Recentlist,l
+			RecentItem[recentcount] = CreateMenu( l,recentcount,recentmenu,recentcount+47,modifier_command )
+		EndIf
+	Next
+Else
+	DisableGadget recentmenu	
+EndIf
+			
 UpdateWindowMenu Window
+
 
 Const maxvragen = 20
 Const maxantwoorden = maxvragen
@@ -125,11 +154,15 @@ End Function
 
 Function menu(i)
 	Select i
+		Case 1,2,3,4,5,6,7,8,9,10
+				Load MenuText(recentitem[i])
 		Case 1000	NewFile
 		Case 1001	Load
 		Case 1002	save rec
 		Case 1003	save rec,True
 		Case 1004	allsave
+		Case 1005	export
+		Case 1006	export True
 		Case 9999 	quit
 	End Select
 End Function
@@ -157,6 +190,16 @@ Function AllSave()
 	Next
 End Function
 
+Function UpdateRecent(f$)
+	If ListContains(recentlist,f) Return
+	ListAddFirst recentlist,f
+	Local bt:TStream = WriteStream(recentfile)
+	For Local l$=EachIn recentlist
+		WriteLine bt,l
+	Next
+	CloseStream bt
+End Function
+
 Function Save(rec:Tdata,forcename=False)
 	Local f$ = rec.filename
 	If (Not f) Or forcename
@@ -173,11 +216,13 @@ Function Save(rec:Tdata,forcename=False)
 	bt.close "zlib"
 	rec.modified = False
 	rec.filename = f
+	updaterecent f
 End Function
 
-Function Load()
+Function Load(af$="")
 	Local rec:Tdata = New tdata
-	Local f$ = RequestFile("Geef a.u.b een bestandsnaam op","Staafpuzzle Maker:spmf"); If Not f Return
+	Local f$ = af
+	If Not f f = RequestFile("Geef a.u.b een bestandsnaam op","Staafpuzzle Maker:spmf"); If Not f Return
 	Local d:TJCRDir = JCR_Dir(f)
 	If Not d Return Notify("Het bestand is niet herkend")
 	For Local ff$=EachIn(["STAAFWOORD","ANTWOORDEN","VRAGEN"])
@@ -204,8 +249,10 @@ Function Load()
 	rec.filename=f
 	ListAddLast data,rec
 	updatetabber CountList(data)		-1	
+	updaterecent f
 End Function
 
+Include "Export.bmx"
 
 Repeat
 	AG = ActiveGadget()
